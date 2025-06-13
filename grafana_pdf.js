@@ -712,8 +712,9 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                 return total;
             }, excludedTypes);
 
-            const maxWaitTime = process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_COMPLETION_TIMEOUT || 60000;
-            const interval = process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_INTERVAL || 4000;
+            const maxWaitTime = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_COMPLETION_TIMEOUT, 10) || 60000;
+            const maxStableWait = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_MAX_QUERY_COMPLETION_TIME, 10) || 30000;
+            const interval = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_INTERVAL, 10) || 4000;
             let elapsedTime = 0;
             let lastCompletedCount = 0;
             let stableCountTime = 0;
@@ -721,7 +722,7 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
             while (elapsedTime < maxWaitTime) {
                 const completedQueryCount = await page.evaluate(() => {
                     return window.performance.getEntriesByType("resource")
-                        .filter(request => (request.initiatorType === 'fetch' && request.name.includes('query?'))).length;
+                        .filter(request => (request.initiatorType === 'fetch' && request.name.includes('query'))).length;
                 });
 
                 console.log(`Completed Queries: ${completedQueryCount} / ${panelQueryCount}`);
@@ -733,8 +734,8 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
 
                 if (completedQueryCount === lastCompletedCount) {
                     stableCountTime += interval;
-                    if (stableCountTime >= process.env.CHECK_QUERIES_TO_COMPLETE_MAX_QUERY_COMPLETION_TIME || 30000) {
-                        throw new Error("Query completion seems to be stuck. Exiting after no progress for " + process.env.CHECK_QUERIES_TO_COMPLETE_MAX_QUERY_COMPLETION_TIME +"ms.");
+                    if (stableCountTime >= maxStableWait) {
+                        throw new Error("Query completion seems to be stuck. Exiting after no progress for " + maxStableWait +"ms.");
                     }
                 } else {
                     stableCountTime = 0;
@@ -743,6 +744,7 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                 lastCompletedCount = completedQueryCount;
                 await new Promise(resolve => setTimeout(resolve, interval));
                 elapsedTime += interval;
+                console.log(`Waiting for queries to complete... Elapsed time: ${elapsedTime}ms`);
             }
 
             if (elapsedTime >= maxWaitTime) {
