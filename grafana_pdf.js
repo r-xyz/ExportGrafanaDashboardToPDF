@@ -676,37 +676,36 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                 const response = await fetch(dashboardRequest.name);
                 const json = await response.json();
                 const panels = json.dashboard?.panels || [];
+                const templating = json.dashboard?.templating?.list || [];
 
-                function collectValidAndErroredPanels(panels) {
+                function collectValidPanels(panels) {
                     let valid = 0;
-                    let errored = 0;
                     for (const panel of panels) {
                         if (excludedTypes.includes(panel.type)) continue;
                         if (panel.type === 'row' && Array.isArray(panel.panels)) {
-                            const nested = collectValidAndErroredPanels(panel.panels);
-                            valid += nested.valid;
-                            errored += nested.errored;
+                            valid += collectValidPanels(panel.panels);
                             continue;
                         }
                         if (panel.datasource) valid++;
-                        else errored++;
                     }
-                    return { valid, errored };
+                    return valid;
                 }
 
-                const { valid, errored } = collectValidAndErroredPanels(panels);
-                console.log(`Panel summary — Valid: ${valid}, Errored: ${errored}`);
-                return { valid, errored };
+                const validPanels = collectValidPanels(panels);
+
+                const templatingQueries = templating.filter(v =>
+                    v.type === 'query'
+                );
+
+                console.log(`Panel summary — Valid: ${validPanels}`);
+                console.log(`Templating variables with queries: ${templatingQueries.length}`);
+                console.log(`✅ Total Expected Queries: ${validPanels + templatingQueries.length}`);
+
+                return {
+                    valid: validPanels,
+                    templating: templatingQueries.length
+                };
             }, ['text']);
-
-            const panelQueryCount = dashboardQueryInfo.valid;
-            const maxWaitTime = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_COMPLETION_TIMEOUT, 10) || 60000;
-            const maxStableWait = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_MAX_QUERY_COMPLETION_TIME, 10) || 30000;
-            const interval = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_INTERVAL, 10) || 4000;
-
-            let elapsedTime = 0;
-            let lastCompletedCount = 0;
-            let stableCountTime = 0;
 
             const panelErrorSelectors = [
                 '.panel-content .alert-error',
@@ -735,7 +734,7 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                     if (panel) {
                         uniquePanels.add(panel);
 
-                        const possibleTitleSelectors = [
+                        const titleSelectors = [
                             'div[class*="panel-title"] h2',
                             '[data-testid="panel-title"]',
                             '.panel-header span',
@@ -743,10 +742,10 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                         ];
 
                         let title = '[Untitled Panel]';
-                        for (const selector of possibleTitleSelectors) {
-                            const titleEl = panel.querySelector(selector);
-                            if (titleEl && titleEl.textContent.trim()) {
-                                title = titleEl.textContent.trim();
+                        for (const selector of titleSelectors) {
+                            const el = panel.querySelector(selector);
+                            if (el?.textContent?.trim()) {
+                                title = el.textContent.trim();
                                 break;
                             }
                         }
@@ -759,11 +758,60 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                 return uniquePanels.size;
             }, panelErrorSelectors);
 
-            const effectivePanelQueryCount = panelQueryCount - panelErrorCount;
+            const variableErrorSelectors = [
+                'div[data-testid*="template variable"] label svg',
+            ];
 
-            if (effectivePanelQueryCount < 0) {
-                console.warn(`More error panels (${panelErrorCount}) than expected query panels (${panelQueryCount}). Forcing to 0.`);
-            }
+            const variableQueryErrorCount = await page.evaluate((selectors) => {
+                const matched = selectors.flatMap(sel => Array.from(document.querySelectorAll(sel)));
+
+                const variableWrappers = new Set();
+
+                matched.forEach(el => {
+                    const variableWrapper = el.closest('.variable-wrapper') ||
+                        el.closest('.template-variable-wrapper') ||
+                        el.closest('div[data-testid*="template variable"]');
+
+                    if (variableWrapper) {
+                        variableWrappers.add(variableWrapper);
+                        const titleSelectors = [
+                            'span.variable-label',
+                            'label[data-testid*="template variable"]',
+                            '.variable-name',
+                            '.variable-title'
+                        ];
+                        let title = '[Untitled Variable]';
+                        for (const selector of titleSelectors) {
+                            const el = variableWrapper.querySelector(selector);
+                            if (el?.textContent?.trim()) {
+                                title = el.textContent.trim();
+                                break;
+                            }
+                        }
+                        console.log(`🛑 Variable with query error detected: "${title}"`);
+                    }
+                });
+
+                console.log(`🛑 Variables with query errors detected: ${variableWrappers.size}`);
+                return variableWrappers.size;
+            }, variableErrorSelectors);
+
+            const panelCountFromJson = dashboardQueryInfo.valid;
+            const variableQueryCount = dashboardQueryInfo.templating;
+
+            const effectiveVariableQueryCount = Math.max(0, variableQueryCount - variableQueryErrorCount);
+
+            const effectivePanelQueryCount = Math.max(0, (panelCountFromJson - panelErrorCount)) + effectiveVariableQueryCount;
+
+            const maxWaitTime = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_COMPLETION_TIMEOUT, 10) || 60000;
+            const maxStableWait = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_MAX_QUERY_COMPLETION_TIME, 10) || 30000;
+            const interval = parseInt(process.env.CHECK_QUERIES_TO_COMPLETE_QUERIES_INTERVAL, 10) || 4000;
+
+            let elapsedTime = 0;
+            let lastCompletedCount = 0;
+            let stableCountTime = 0;
+
+            console.log(`Waiting for queries to complete... Expected: ${effectivePanelQueryCount}, Timeout: ${maxWaitTime}ms, Interval: ${interval}ms`);
 
             while (elapsedTime < maxWaitTime) {
                 const completedQueryCount = await page.evaluate(() =>
@@ -773,12 +821,12 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
 
                 console.log(`Completed Queries: ${completedQueryCount} / ${effectivePanelQueryCount}`);
 
-                if (completedQueryCount >= panelQueryCount) {
+                if (completedQueryCount >= effectivePanelQueryCount) {
                     console.log("All expected queries have completed.");
                     break;
                 }
 
-                if (completedQueryCount === effectivePanelQueryCount) {
+                if (completedQueryCount === lastCompletedCount) {
                     stableCountTime += interval;
                     if (stableCountTime >= maxStableWait) {
                         throw new Error(`❌ Query completion seems stuck — no progress after ${maxStableWait}ms.`);
@@ -797,6 +845,7 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
                 throw new Error("Timeout: Not all queries completed in time.");
             }
         }
+
 
         // Add a final check for all panels and ensure they're visible
         await page.evaluate(async () => {
