@@ -84,10 +84,12 @@ const auth_header = 'Basic ' + Buffer.from(auth_string).toString('base64');
         });
         console.log("Page loaded...");
 
-        page.on('console', msg => {
-            for (let i = 0; i < msg.args().length; ++i)
-                msg.args()[i].jsonValue().then(val => console.log(`[Browser console] ${msg.type()}:`, val));
-        });
+        if(process.env.DEBUG_MODE === 'true') {
+            page.on('console', msg => {
+                for (let i = 0; i < msg.args().length; ++i)
+                    msg.args()[i].jsonValue().then(val => console.log(`[Browser console] ${msg.type()}:`, val));
+            });
+        }
 
         let dashboardName = 'output_grafana';
         let date = new Date().toISOString().split('T')[0];
