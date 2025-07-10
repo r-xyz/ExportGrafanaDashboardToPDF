@@ -45,7 +45,6 @@ app.post('/generate-pdf', (req, res) => {
 
   if (pdfWidthPx) args.push(`--pdfWidthPx=${pdfWidthPx}`);
   if (pdfHeightPx) args.push(`--pdfHeightPx=${pdfHeightPx}`);
-  if (GRAFANA_SERVICE_ACCOUNT) args.push('--serviceAccount');
 
   const script = fork('grafana_pdf.js', args);
 

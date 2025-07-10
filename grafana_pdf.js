@@ -10,7 +10,7 @@ const url = args[0];
 const auth_string = args[1];
 const widthArg = args.find(arg => arg.startsWith('--pdfWidthPx='));
 const heightArg = args.find(arg => arg.startsWith('--pdfHeightPx='));
-const serviceAccount = args.find(arg => arg.startsWith('--serviceAccount'));
+const useServiceAccount = process.env.GRAFANA_SERVICE_ACCOUNT === 'true';
 let outfile = null;
 
 const width_px = widthArg ? parseInt(widthArg.split('=')[1], 10) : parseInt(process.env.PDF_WIDTH_PX, 10) || 1920;
@@ -21,7 +21,8 @@ const overrideHeight = heightArg
 console.log("PDF width set to:", width_px);
 console.log("PDF height set to:", overrideHeight !== null ? overrideHeight : "auto (auto-detected)");
 
-const auth_header = serviceAccount ? 'Bearer ' + auth_string : 'Basic ' + Buffer.from(auth_string).toString('base64');
+const auth_header = useServiceAccount ? 'Bearer ' + auth_string : 'Basic ' + Buffer.from(auth_string).toString('base64');
+console.log("Using authentication:",  useServiceAccount ? "Service Account" : "Basic Auth");
 
 (async () => {
     try {
