@@ -35,9 +35,11 @@ Edit the values according to your configuration.
 ```dotenv
 GRAFANA_USER=gfexp
 GRAFANA_PASSWORD=gfexp
+GRAFANA_SERVICE_ACCOUNT=false
 ```
 
-`GRAFANA_USER` and `GRAFANA_PASSWORD` are the credentials the exporter will use to log into Grafana.
+`GRAFANA_USER` and `GRAFANA_PASSWORD` are the credentials the exporter will use to log into Grafana. For a service account
+set `GRAFANA_SERVICE_ACCOUNT` to `true` and provide token in ` GRAFANA_PASSWORD`.
 
 ## Usage
 To start the server, run the following command:

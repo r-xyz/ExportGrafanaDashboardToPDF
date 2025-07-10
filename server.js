@@ -6,6 +6,7 @@ const { fork } = require('child_process');
 
 const GRAFANA_USER = process.env.GRAFANA_USER;
 const GRAFANA_PASSWORD = process.env.GRAFANA_PASSWORD;
+const GRAFANA_SERVICE_ACCOUNT = process.env.GRAFANA_SERVICE_ACCOUNT === 'true';
 
 const app = express();
 const port = process.env.EXPORT_SERVER_PORT || 3001;
@@ -40,7 +41,7 @@ app.post('/generate-pdf', (req, res) => {
 
   const finalUrl = urlObj.toString();
 
-  const args = [finalUrl, `${GRAFANA_USER}:${GRAFANA_PASSWORD}`];
+  const args = [finalUrl, GRAFANA_SERVICE_ACCOUNT ? `${GRAFANA_PASSWORD}` : `${GRAFANA_USER}:${GRAFANA_PASSWORD}`];
 
   if (pdfWidthPx) args.push(`--pdfWidthPx=${pdfWidthPx}`);
   if (pdfHeightPx) args.push(`--pdfHeightPx=${pdfHeightPx}`);
