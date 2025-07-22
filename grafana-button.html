@@ -853,6 +853,12 @@
                                 newParams.set('theme', 'current');
                             }
 
+                            for (let [key, value] of params.entries()) {
+                                if (key.startsWith('var-')) {
+                                    newParams.set(key, value);
+                                }
+                            }
+
                             return url.origin + url.pathname + (newParams.toString() ? '?' + newParams.toString() : '');
                         }
 
