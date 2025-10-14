@@ -237,7 +237,7 @@
         checkStatus();
     })();
 
-    document.querySelector('div[data-testid*="new export button"] button[data-testid*="new export button"]')?.addEventListener('click', function () {
+    document.querySelector('div[data-testid*="new export button"], button[data-testid*="new export button"]')?.addEventListener('click', function () {
         console.log("[GFEXP] Bouton d'exportation cliqué");
 
         setTimeout(() => {
