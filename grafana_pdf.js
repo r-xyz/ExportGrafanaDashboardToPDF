@@ -95,7 +95,7 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
         let dashboardName = 'output_grafana';
         let date = new Date().toISOString().split('T')[0];
-        let addRandomStr = false;
+        const addRandomStr = process.env.ADD_RANDOM_STRING_TO_FILE_NAME === 'true';
 
         if (process.env.EXTRACT_DATE_AND_DASHBOARD_NAME_FROM_HTML_PANEL_ELEMENTS === 'true') {
             console.log("Extracting dashboard name and date from the HTML page...");
@@ -125,10 +125,8 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
             if (scrapedPanelName && !scrapedDashboardName) {
                 console.log("Panel name fetched:", scrapedPanelName);
                 dashboardName = scrapedPanelName;
-                addRandomStr = false;
             } else if (!scrapedDashboardName) {
                 console.log("Dashboard name not found. Using default value.");
-                addRandomStr = true;
             } else {
                 console.log("Dashboard name fetched:", scrapedDashboardName);
                 dashboardName = scrapedDashboardName;
@@ -185,12 +183,12 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
             if (scrapedPanelName) {
                 console.log("Panel name fetched:", scrapedPanelName);
                 dashboardName = scrapedPanelName;
-                addRandomStr = false;
             }
 
             console.log("Date fetched from URL:", date);
         }
 
+        console.log("addRandomStr", addRandomStr);
         outfile = `./output/${dashboardName.replace(/\s+/g, '_')}_${date.replace(/\s+/g, '_')}${addRandomStr ? '_' + Math.random().toString(36).substring(7) : ''}.pdf`;
 
         const loginPageDetected = await page.evaluate(() => {
@@ -498,11 +496,27 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
         // IMPROVED: Enhanced height detection with Grafana 12 specific selectors
         let scrollableSection = null;
+
+        console.log("Forcing DOM reflow and layout recalculation...");
+        await page.evaluate(() => {
+            // try to resize the window to force layout recalculation
+            window.dispatchEvent(new Event('resize'));
+
+           // try to force a reflow
+            document.body.style.display = 'none';
+            document.body.offsetHeight;
+            document.body.style.display = 'block';
+
+            return new Promise(resolve => setTimeout(resolve, 500));
+        });
+        console.log("Layout reflow completed. Re-calculating content height.");
+
         const totalHeight = await page.evaluate(() => {
             console.log("Attempting to detect page height with multiple selectors...");
 
             // Priority list of selectors for different Grafana versions
             const selectors = [
+                '#pageContent div[class*="canvas-wrapper-old"]',                          // Grafana 12.0.2+
                 '[data-testid="dashboard-grid"]',       // Grafana 12 dashboard grid (highest priority)
                 '[data-testid="scrollbar-view"]',       // Grafana 11.5+
                 '.scrollbar-view',                      // Grafana <= 11.4
@@ -539,6 +553,7 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
             // NEW: Grafana 12 specific panel height calculation
             const allPanelSelectors = [
+                '#pageContent div[class*="canvas-wrapper-old"]',
                 '[data-testid="panel"]',
                 '.panel-container',
                 '.react-grid-item',
@@ -609,8 +624,8 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
                 // Progressive scrolling with pauses
                 const viewportHeight = window.innerHeight;
-                const maxScrolls = 15;  // Increased for Grafana 12
-                const scrollDelay = 500;
+                const maxScrolls = 25;  // Increased for Grafana 12
+                const scrollDelay = 750;
 
                 for (let i = 0; i < maxScrolls; i++) {
                     window.scrollTo(0, i * viewportHeight / 2);
@@ -632,20 +647,20 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
                 // Progressive scroll approach
                 const viewportHeight = window.innerHeight;
-                const totalScrolls = Math.ceil(document.body.scrollHeight / (viewportHeight / 2));
-                const scrollDelay = 500;
+                const totalScrolls = Math.ceil(document.body.scrollHeight / (viewportHeight / 3));
+                const scrollDelay = 750;
 
                 console.log(`Planning ${totalScrolls} scroll steps`);
 
                 // First scroll down gradually
                 for (let i = 0; i < totalScrolls; i++) {
-                    window.scrollTo(0, i * viewportHeight / 2);
+                    window.scrollTo(0, i * viewportHeight / 3);
                     await new Promise(resolve => setTimeout(resolve, scrollDelay));
                 }
 
                 // Then scroll back up gradually
                 for (let i = totalScrolls; i >= 0; i--) {
-                    window.scrollTo(0, i * viewportHeight / 2);
+                    window.scrollTo(0, i * viewportHeight / 3);
                     await new Promise(resolve => setTimeout(resolve, scrollDelay));
                 }
 
@@ -856,6 +871,7 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
 
             // Find all panels with any known selector
             const panelSelectors = [
+                '#pageContent div[class*="canvas-wrapper-old"]',
                 '[data-testid="panel"]',
                 '.panel-container',
                 '.react-grid-item',
@@ -918,6 +934,24 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
         } else {
             console.log(`PDF page height will follow auto-detected content height: ${pdfHeight}px`);
         }
+
+        // --- Unpage white gap fix (1-page PDF, no extra libs) ---
+        await page.emulateMediaType('screen'); // ignore @media print de Grafana
+
+// Déverrouille les wrappers scrollables & neutralise le clipping
+        await page.addStyleTag({
+            content: `
+    html, body {
+      height: auto !important;
+      overflow: visible !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    @page { size: ${width_px}px ${pdfHeight}px; margin: 0; }
+  `
+        });
+
+
         await page.pdf({
             path: outfile,
             width: width_px + 'px',
