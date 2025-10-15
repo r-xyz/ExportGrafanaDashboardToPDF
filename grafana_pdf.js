@@ -935,20 +935,18 @@ console.log("Using authentication:",  useServiceAccount ? "Service Account" : "B
             console.log(`PDF page height will follow auto-detected content height: ${pdfHeight}px`);
         }
 
-        // --- Unpage white gap fix (1-page PDF, no extra libs) ---
-        await page.emulateMediaType('screen'); // ignore @media print de Grafana
+        await page.emulateMediaType('screen');
 
-// Déverrouille les wrappers scrollables & neutralise le clipping
         await page.addStyleTag({
             content: `
-    html, body {
-      height: auto !important;
-      overflow: visible !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    @page { size: ${width_px}px ${pdfHeight}px; margin: 0; }
-  `
+                html, body {
+                  height: auto !important;
+                  overflow: visible !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                @page { size: ${width_px}px ${pdfHeight}px; margin: 0; }
+            `
         });
 
 
