@@ -178,29 +178,26 @@ To activate this feature, set the following variable to `true` in your `.env` fi
 EXTRACT_DATE_AND_DASHBOARD_NAME_FROM_HTML_PANEL_ELEMENTS=true
 ```
 
-And then add the following code to the Grafana panel where you want to display the dashboard name and the time range. You can customize the display format by modifying the `formatTimestamp` function in the script below:
+And the following code is used to extract the dashboard title and date range from the HTML elements.
+
+> You can remove this section if you do not want to use this feature.
 
 ```html
+<!-- Dashboard title and date display -->
+[...]
+<style>
+    [...]
+</style>
 
-<div style="display:flex; align-items:center;justify-content:space-between;">
-  <p id="gfexp_display_actual_dashboard_title" style="margin: 0;line-height: 1rem;">${__dashboard}</p>
-  <p id="gfexp_display_actual_date" style="margin: 0;line-height: 1rem;text-transform:capitalize;"></p>
+<div id="gfexp_display_container">
+    <p id="gfexp_display_actual_dashboard_title">${__dashboard}</p>
+    <p id="gfexp_display_actual_date"></p>
 </div>
 
 <script>
-    (function() {
-        function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            return date.toLocaleDateString( window.gfexpLang === 'fr' ? 'fr-FR' : 'en-US', options);
-        }
-
-        let fromTimestampGrafana = ${__from};
-        let toTimestampGrafana = ${__to};
-
-        document.getElementById("gfexp_display_actual_date").innerHTML = formatTimestamp(fromTimestampGrafana) + " - " + formatTimestamp(toTimestampGrafana);
-    })();
+    [...]
 </script>
+<!-- End of dashboard title and date display -->
 ```
 
 ### Force Kiosk Mode

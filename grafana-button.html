@@ -64,12 +64,42 @@
     })();
 </script>
 
+<!-- Dashboard title and date display -->
+<!-- This section displays the dashboard title and the selected date range -->
+<!-- Necessary when EXTRACT_DATE_AND_DASHBOARD_NAME_FROM_HTML_PANEL_ELEMENTS is enabled -->
+<!-- You can remove this section if you don't need it -->
+<style>
+    div[data-testid*="panel content"] > div:has(.markdown-html [id^="gfexp_"]) {
+        contain: unset!important;
+    }
 
+    div[data-testid*="panel content"] div:has(> .markdown-html) {
+        overflow:visible;
+    }
 
-<div style="display:flex; align-items:center;justify-content:space-between;">
-    <p id="gfexp_display_actual_dashboard_title" style="margin: 0;line-height: 1rem;">${__dashboard}</p>
-    <p id="gfexp_display_actual_date" style="margin: 0;line-height: 1rem;text-transform:capitalize;"></p>
+    #gfexp_display_container {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+    }
+
+    #gfexp_display_actual_dashboard_title {
+        margin: 0;
+        line-height: 1rem;
+    }
+
+    #gfexp_display_actual_date {
+        margin: 0;
+        line-height: 1rem;
+        text-transform:capitalize;
+    }
+</style>
+
+<div id="gfexp_display_container">
+    <p id="gfexp_display_actual_dashboard_title">${__dashboard}</p>
+    <p id="gfexp_display_actual_date"></p>
 </div>
+<!-- End of dashboard title and date display -->
 
 <script>
     (function() {
